@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Super Clash — Prototype</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070914;touch-action:none;user-select:none}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+canvas{display:block;width:100%;height:100%}
+</style>
+
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#10183a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Super Clash">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+</head>
+<body><canvas id="game"></canvas>
+<script>
+const C=document.getElementById("game"),X=C.getContext("2d");
+let W=0,H=0,D=1,G=0;
+function resize(){D=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;C.width=W*D;C.height=H*D;X.setTransform(D,0,0,D,0,0);G=H*.78}
+addEventListener("resize",resize);resize();
+
+const keys={}, touches=new Map();
+addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=1;if(e.key===" ")keys.space=1});
+addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=0;if(e.key===" ")keys.space=0});
+C.addEventListener("touchstart",e=>{for(const t of e.changedTouches)touches.set(t.identifier,{x:t.clientX,y:t.clientY})},{passive:false});
+C.addEventListener("touchmove",e=>{for(const t of e.changedTouches)touches.set(t.identifier,{x:t.clientX,y:t.clientY});e.preventDefault()},{passive:false});
+C.addEventListener("touchend",e=>{for(const t of e.changedTouches)touches.delete(t.identifier)},{passive:false});
+function hit(x,y,r){for(const p of touches.values()){let dx=p.x-x,dy=p.y-y;if(dx*dx+dy*dy<=r*r)return true}return false}
+function control(n){
+ if(n===1)return {l:keys.a||hit(55,H-78,42),r:keys.d||hit(155,H-78,42),j:keys.w||hit(105,H-140,40),a:keys.f||hit(250,H-78,34),h:keys.g||hit(305,H-123,34),s:keys.r||hit(305,H-37,34)};
+ return {l:keys.j||hit(W-155,H-78,42),r:keys.l||hit(W-55,H-78,42),j:keys.i||hit(W-105,H-140,40),a:keys.o||hit(W-250,H-78,34),h:keys.p||hit(W-305,H-123,34),s:keys.k||hit(W-305,H-37,34)};
+}
+function circle(x,y,r,fill,alpha=.45){X.globalAlpha=alpha;X.fillStyle=fill;X.beginPath();X.arc(x,y,r,0,Math.PI*2);X.fill();X.globalAlpha=1}
+function text(t,x,y,size,fill="#fff",align="center"){X.fillStyle=fill;X.font=`800 ${size}px system-ui`;X.textAlign=align;X.textBaseline="middle";X.fillText(t,x,y)}
+
+class Fighter{
+ constructor(x,side,name,color,kind){this.x=x;this.y=G-112;this.vx=0;this.vy=0;this.side=side;this.name=name;this.color=color;this.kind=kind;this.hp=100;this.energy=0;this.face=side;this.ground=true;this.cool=0;this.attack=0;this.stun=0;this.flash=0}
+ update(c,o){
+  if(this.cool)this.cool--; if(this.attack)this.attack--; if(this.flash)this.flash--; if(this.stun){this.stun--;this.vx*=.9;return}
+  let dir=(c.l?-1:0)+(c.r?1:0); this.vx=dir*4.4; if(dir)this.face=dir;
+  if(c.j&&this.ground){this.vy=-11;this.ground=false}
+  this.vy+=.55;this.x+=this.vx;this.y+=this.vy;
+  if(this.y>=G-112){this.y=G-112;this.vy=0;this.ground=true}
+  this.x=Math.max(45,Math.min(W-45,this.x));
+  if(c.a)this.attackHit(o,8,78,16); if(c.h)this.attackHit(o,13,88,23); if(c.s)this.special(o);
+ }
+ attackHit(o,dmg,range,cool){if(this.cool)return;this.cool=cool;this.attack=8;let dx=o.x-this.x;if(Math.abs(dx)<range&&Math.sign(dx||1)===this.face){o.hp=Math.max(0,o.hp-dmg);o.stun=8;o.flash=6;o.vx=this.face*5;this.energy=Math.min(100,this.energy+10)}}
+ special(o){if(this.energy<50||this.cool)return;this.energy-=50;this.cool=38;this.attack=18;let dx=o.x-this.x;if(Math.abs(dx)<240&&Math.sign(dx||1)===this.face){o.hp=Math.max(0,o.hp-27);o.stun=18;o.flash=10;o.vx=this.face*10}}
+ draw(){
+  X.save();X.translate(this.x,this.y);
+  if(this.flash%2){X.globalAlpha=.55}
+  X.fillStyle="#000";X.globalAlpha=.25;X.beginPath();X.ellipse(0,113,44,9,0,0,Math.PI*2);X.fill();X.globalAlpha=1;
+  X.strokeStyle=this.color;X.lineWidth=14;X.lineCap="round";
+  X.beginPath();X.moveTo(-12,68);X.lineTo(-18,108);X.moveTo(12,68);X.lineTo(18,108);X.stroke();
+  X.fillStyle=this.color;X.beginPath();X.roundRect(-28,20,56,60,14);X.fill();
+  X.fillStyle="#fff";X.beginPath();X.arc(0,49,10,0,Math.PI*2);X.fill();
+  X.fillStyle="#f2c39b";X.beginPath();X.arc(0,2,23,0,Math.PI*2);X.fill();
+  X.fillStyle=this.kind==="solar"?"#f4d23d":"#151827";X.beginPath();X.arc(0,-2,23,Math.PI,Math.PI*2);X.fill();
+  X.strokeStyle=this.color;X.lineWidth=14;X.beginPath();X.moveTo(this.face*18,32);X.lineTo(this.face*42,54);X.stroke();
+  if(this.attack){X.strokeStyle=this.kind==="solar"?"#ffe66d":"#76dcff";X.lineWidth=7;X.globalAlpha=.8;X.beginPath();X.moveTo(this.face*35,45);X.lineTo(this.face*82,45);X.stroke();X.globalAlpha=1}
+  X.restore();
+ }
+}
+
+let p1,p2,time,gameOver=false,last=0;
+function reset(){p1=new Fighter(W*.27,1,"TITAN SOLAR","#e64959","solar");p2=new Fighter(W*.73,-1,"ARACHNOS","#3d8cff","arach");time=60;gameOver=false}
+reset();
+
+function drawArena(){
+ let g=X.createLinearGradient(0,0,0,H);g.addColorStop(0,"#11183a");g.addColorStop(1,"#070914");X.fillStyle=g;X.fillRect(0,0,W,H);
+ X.fillStyle="#18235a";X.fillRect(0,G,W,H-G);
+ for(let x=0;x<W;x+=70){X.strokeStyle="rgba(255,255,255,.06)";X.beginPath();X.moveTo(x,G);X.lineTo(x-80,H);X.stroke()}
+ X.strokeStyle="rgba(255,255,255,.18)";X.beginPath();X.moveTo(0,G);X.lineTo(W,G);X.stroke();
+}
+function bar(x,y,w,h,val,color,flip=false){X.fillStyle="rgba(0,0,0,.5)";X.fillRect(x,y,w,h);X.fillStyle=color;let ww=w*Math.max(0,val)/100;if(flip)X.fillRect(x+w-ww,y,ww,h);else X.fillRect(x,y,ww,h)}
+function controls(){
+ circle(55,H-78,42,"#fff",.16);text("◀",55,H-78,23);
+ circle(155,H-78,42,"#fff",.16);text("▶",155,H-78,23);
+ circle(105,H-140,40,"#fff",.16);text("▲",105,H-140,22);
+ circle(250,H-78,34,"#e9f1ff",.16);text("A",250,H-78,16);
+ circle(305,H-123,34,"#ffd34e",.18);text("B",305,H-123,16);
+ circle(305,H-37,34,"#7ddcff",.18);text("⚡",305,H-37,17);
+ circle(W-155,H-78,42,"#fff",.16);text("◀",W-155,H-78,23);
+ circle(W-55,H-78,42,"#fff",.16);text("▶",W-55,H-78,23);
+ circle(W-105,H-140,40,"#fff",.16);text("▲",W-105,H-140,22);
+ circle(W-250,H-78,34,"#e9f1ff",.16);text("A",W-250,H-78,16);
+ circle(W-305,H-123,34,"#ffd34e",.18);text("B",W-305,H-123,16);
+ circle(W-305,H-37,34,"#7ddcff",.18);text("⚡",W-305,H-37,17);
+}
+function frame(){
+ drawArena();
+ text("SUPER CLASH",W/2,26,17,"#fff");
+ text(p1.name,24,48,13,p1.color,"left");text(p2.name,W-24,48,13,p2.color,"right");
+ bar(24,60,Math.max(100,W*.34),15,p1.hp,p1.color);
+ bar(W-24-Math.max(100,W*.34),60,Math.max(100,W*.34),15,p2.hp,p2.color,true);
+ bar(24,80,Math.max(100,W*.22),7,p1.energy,"#6bdcff");
+ bar(W-24-Math.max(100,W*.22),80,Math.max(100,W*.22),7,p2.energy,"#6bdcff",true);
+ text(String(Math.max(0,Math.ceil(time))),W/2,67,21);
+ p1.draw();p2.draw();controls();
+ if(gameOver){
+  X.fillStyle="rgba(0,0,0,.7)";X.fillRect(0,0,W,H);
+  let winner=p1.hp>0?p1.name:p2.name;text(winner+" GAGNE !",W/2,H*.38,30);
+  text("Touchez l'écran pour rejouer",W/2,H*.48,16,"#dce5ff");
+ }
+}
+function loop(ts){
+ let dt=Math.min(.033,(ts-last)/1000||.016);last=ts;
+ if(!gameOver){
+  time-=dt;
+  p1.update(control(1),p2);p2.update(control(2),p1);
+  if(p1.hp<=0||p2.hp<=0||time<=0)gameOver=true;
+ }
+ frame();requestAnimationFrame(loop)
+}
+C.addEventListener("touchstart",()=>{if(gameOver)reset()},{passive:true});
+requestAnimationFrame(loop);
+</script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("./service-worker.js").catch(()=>{});}</script></body>
+</html>
